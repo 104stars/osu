@@ -94,6 +94,30 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
             Assert.That(perfectScorePerformance(new OsuModHidden(), new OsuModRelax(), new OsuModUnnerfed()), Is.EqualTo(hidden).Within(CHECK_PRECISION));
         }
 
+        [Test]
+        public void TestLoweredCircleSizeDoesNotLowerMaximumScore()
+        {
+            float circleSize = GetBeatmap(beatmap_name).BeatmapInfo.Difficulty.CircleSize;
+
+            long noMod = maximumScore();
+
+            Assert.That(maximumScore(new OsuModDifficultyAdjust { CircleSize = { Value = circleSize - 2 } }), Is.LessThan(noMod), "sanity check");
+            Assert.That(maximumScore(new OsuModDifficultyAdjust { CircleSize = { Value = circleSize - 2 } }, new OsuModRelax(), new OsuModUnnerfed()), Is.EqualTo(noMod));
+            Assert.That(maximumScore(new OsuModUnnerfed()), Is.EqualTo(noMod));
+        }
+
+        private long maximumScore(params Mod[] mods)
+        {
+            var ruleset = new OsuRuleset();
+            var playable = GetBeatmap(beatmap_name).GetPlayableBeatmap(ruleset.RulesetInfo, mods);
+
+            var scoreProcessor = ruleset.CreateScoreProcessor();
+            scoreProcessor.Mods.Value = mods;
+            scoreProcessor.ApplyBeatmap(playable);
+
+            return scoreProcessor.MaximumTotalScore;
+        }
+
         private double starRating(params Mod[] mods) => CreateDifficultyCalculator(GetBeatmap(beatmap_name)).Calculate(mods).StarRating;
 
         private double perfectScorePerformance(params Mod[] mods)

@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using osu.Framework.Allocation;
 using osu.Framework.Audio.Track;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics.Textures;
 using osu.Game.Beatmaps;
@@ -48,6 +49,9 @@ namespace osu.Game.Screens.Play.HUD
 
         private Mod[] clonedMods;
 
+        [Resolved(canBeNull: true)]
+        private IBindable<WorkingBeatmap> workingBeatmap { get; set; }
+
         [BackgroundDependencyLoader]
         private void load(BeatmapDifficultyCache difficultyCache)
         {
@@ -58,8 +62,7 @@ namespace osu.Game.Screens.Play.HUD
 
                 scoreInfo = new ScoreInfo(gameplayState.Score.ScoreInfo.BeatmapInfo, gameplayState.Score.ScoreInfo.Ruleset) { Mods = clonedMods };
 
-                var gameplayWorkingBeatmap = new GameplayWorkingBeatmap(gameplayState.Beatmap);
-                difficultyCache.GetTimedDifficultyAttributesAsync(gameplayWorkingBeatmap, gameplayState.Ruleset, clonedMods, loadCancellationSource.Token)
+                difficultyCache.GetTimedDifficultyAttributesAsync(getBeatmapForCalculation(), gameplayState.Ruleset, clonedMods, loadCancellationSource.Token)
                                .ContinueWith(task => Schedule(() =>
                                {
                                    timedAttributes = task.GetResultSafely();
@@ -70,6 +73,16 @@ namespace osu.Game.Screens.Play.HUD
                                        onJudgementChanged(lastJudgement);
                                }), TaskContinuationOptions.OnlyOnRanToCompletion);
             }
+        }
+
+        private IWorkingBeatmap getBeatmapForCalculation()
+        {
+            // The gameplay beatmap already has every mod applied (for example a lowered circle size from Easy or Difficulty Adjust).
+            // With Unnerfed active, easier mods must be left out of the calculation, so it has to start from the unmodified beatmap instead.
+            if (clonedMods.Any(m => m is ModUnnerfed) && workingBeatmap?.Value?.BeatmapInfo.Equals(gameplayState.Beatmap.BeatmapInfo) == true)
+                return workingBeatmap.Value;
+
+            return new GameplayWorkingBeatmap(gameplayState.Beatmap);
         }
 
         protected override void LoadComplete()
