@@ -5,12 +5,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Development;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
+using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Extensions;
 using osu.Game.Online.API;
@@ -46,6 +49,15 @@ namespace osu.Game.Online.Leaderboards
         [Resolved]
         private RulesetStore rulesets { get; set; } = null!;
 
+        private PublicLeaderboardClient publicLeaderboards = null!;
+        private CancellationTokenSource? publicFetchCancellation;
+
+        [BackgroundDependencyLoader]
+        private void load(OsuConfigManager config)
+        {
+            publicLeaderboards = new PublicLeaderboardClient(config);
+        }
+
         /// <summary>
         /// Fetch leaderboard content with the new criteria specified in the background.
         /// On completion, <see cref="Scores"/> will be updated with the results from this call (unless a more recent call with a different criteria has completed).
@@ -61,6 +73,7 @@ namespace osu.Game.Online.Leaderboards
             CurrentCriteria = newCriteria;
             localScoreSubscription?.Dispose();
             inFlightOnlineRequest?.Cancel();
+            publicFetchCancellation?.Cancel();
             scores.Value = null;
 
             if (newCriteria.Beatmap == null || newCriteria.Ruleset == null)
@@ -87,7 +100,10 @@ namespace osu.Game.Online.Leaderboards
                     if (newCriteria.Sorting != LeaderboardSortMode.Score)
                         throw new NotSupportedException($@"Requesting online scores with a {nameof(LeaderboardSortMode)} other than {nameof(LeaderboardSortMode.Score)} is not supported");
 
-                    if (!api.IsLoggedIn)
+                    // When the user has configured their own OAuth application, global leaderboards are read from the public osu! API without logging in.
+                    bool usePublicLeaderboards = newCriteria.Scope == BeatmapLeaderboardScope.Global && publicLeaderboards.IsConfigured;
+
+                    if (!usePublicLeaderboards && !api.IsLoggedIn)
                     {
                         scores.Value = LeaderboardScores.Failure(LeaderboardFailState.NotLoggedIn);
                         return;
@@ -102,6 +118,12 @@ namespace osu.Game.Online.Leaderboards
                     if (newCriteria.Beatmap.OnlineID <= 0 || newCriteria.Beatmap.Status <= BeatmapOnlineStatus.Pending)
                     {
                         scores.Value = LeaderboardScores.Failure(LeaderboardFailState.BeatmapUnavailable);
+                        return;
+                    }
+
+                    if (usePublicLeaderboards)
+                    {
+                        fetchPublicLeaderboard(newCriteria);
                         return;
                     }
 
@@ -164,6 +186,50 @@ namespace osu.Game.Online.Leaderboards
             }
         }
 
+        private void fetchPublicLeaderboard(LeaderboardCriteria criteria)
+        {
+            Debug.Assert(criteria.Beatmap != null && criteria.Ruleset != null);
+
+            var cancellationSource = publicFetchCancellation = new CancellationTokenSource();
+
+            publicLeaderboards.GetScoresAsync(criteria.Beatmap, criteria.Ruleset, cancellationSource.Token).ContinueWith(task => Schedule(() =>
+            {
+                if (cancellationSource.IsCancellationRequested || !ReferenceEquals(CurrentCriteria, criteria))
+                    return;
+
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    Logger.Log($@"Failed to fetch public leaderboard: {task.Exception?.GetBaseException().Message}", LoggingTarget.Network);
+                    scores.Value = LeaderboardScores.Failure(LeaderboardFailState.NetworkFailure);
+                    return;
+                }
+
+                var response = task.GetResultSafely();
+
+                IEnumerable<ScoreInfo> topScores = response.Scores.Select(s => s.ToScoreInfo(rulesets, criteria.Beatmap));
+
+                // Mod filtering is applied locally to the fetched top scores.
+                if (criteria.ExactMods != null)
+                {
+                    var selectedMods = criteria.ExactMods.Select(m => m.Acronym).ToHashSet();
+                    topScores = topScores.Where(s => selectedMods.SetEquals(s.Mods.Select(m => m.Acronym)));
+                }
+
+                var topScoresArray = topScores.OrderByTotalScore()
+                                              .Select((s, idx) =>
+                                              {
+                                                  s.Position = idx + 1;
+                                                  return s;
+                                              })
+                                              .ToArray();
+
+                scores.Value = LeaderboardScores.Success(topScoresArray,
+                    scoresRequested: PublicLeaderboardClient.SCORES_PER_REQUEST,
+                    totalScores: Math.Max(response.ScoresCount, response.Scores.Count),
+                    userScore: null);
+            }), CancellationToken.None);
+        }
+
         private void localScoresChanged(IRealmCollection<ScoreInfo> sender, ChangeSet? changes)
         {
             Debug.Assert(CurrentCriteria != null);
@@ -203,6 +269,7 @@ namespace osu.Game.Online.Leaderboards
             base.Dispose(isDisposing);
 
             localScoreSubscription?.Dispose();
+            publicFetchCancellation?.Cancel();
         }
     }
 

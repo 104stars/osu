@@ -105,7 +105,11 @@ namespace osu.Game
         /// </summary>
         private const double global_track_volume_adjust = 0.8;
 
-        public virtual bool UseDevelopmentServer => DebugUtils.IsDebugBuild;
+        /// <summary>
+        /// Whether to connect to the development server (dev.ppy.sh) instead of the official servers.
+        /// This fork always uses the development server, so that it can never log in to (or submit scores to) an official osu! account.
+        /// </summary>
+        public virtual bool UseDevelopmentServer => true;
 
         public virtual EndpointConfiguration CreateEndpoints() =>
             UseDevelopmentServer ? new DevelopmentEndpointConfiguration() : new ProductionEndpointConfiguration();

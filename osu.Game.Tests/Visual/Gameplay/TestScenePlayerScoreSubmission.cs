@@ -22,6 +22,7 @@ using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Judgements;
+using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.Taiko;
 using osu.Game.Rulesets.Taiko.Mods;
@@ -372,6 +373,25 @@ namespace osu.Game.Tests.Visual.Gameplay
 
             AddStep("exit", () => Player.Exit());
             AddAssert("ensure no submission", () => Player.SubmittedScore == null);
+        }
+
+        [Test]
+        public void TestNoSubmissionWithUnnerfedMod()
+        {
+            prepareTestAPI(true);
+
+            createPlayerTest(createMods: () => new Mod[] { new OsuModRelax(), new OsuModEasy(), new OsuModUnnerfed() });
+
+            AddUntilStep("wait for track to start running", () => Beatmap.Value.Track.IsRunning);
+            AddAssert("token was never requested", () => Player.TokenCreationRequested, () => Is.False);
+
+            addFakeHit();
+
+            AddStep("seek to completion", () => Player.GameplayClockContainer.Seek(Player.DrawableRuleset.Objects.Last().GetEndTime()));
+
+            AddUntilStep("results displayed", () => Player.GetChildScreen() is ResultsScreen);
+            AddAssert("ensure no submission", () => Player.SubmittedScore, () => Is.Null);
+            AddUntilStep("score saved locally", () => Player.ImportedScore, () => Is.Not.Null);
         }
 
         private void createPlayerTest(bool allowFail = false, Func<RulesetInfo, IBeatmap> createBeatmap = null, Func<Ruleset> createRuleset = null, Func<Mod[]> createMods = null)

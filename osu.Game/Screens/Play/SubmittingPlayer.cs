@@ -24,6 +24,7 @@ using osu.Game.Online.Rooms;
 using osu.Game.Online.Spectator;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 using osu.Game.Screens.Ranking;
@@ -101,6 +102,15 @@ namespace osu.Game.Screens.Play
         {
             // Token request construction should happen post-load to allow derived classes to potentially prepare DI backings that are used to create the request.
             var tcs = new TaskCompletionSource<bool>();
+
+            if (Mods.Value.Any(m => m is ModUnnerfed))
+            {
+                // Unnerfed scores are local-only demo scores and must never be submitted.
+                // No token is requested, so submission is skipped entirely (see `submitScore`).
+                Logger.Log($"{nameof(ModUnnerfed)} is active, score will only be saved locally.");
+                tcs.SetResult(false);
+                return false;
+            }
 
             if (Mods.Value.Any(m => !m.UserPlayable))
             {
@@ -218,7 +228,9 @@ namespace osu.Game.Screens.Play
                 realmBeatmap?.LastPlayed = DateTimeOffset.Now;
             });
 
-            spectatorClient.BeginPlaying(token, GameplayState, Score);
+            // Unnerfed gameplay is local-only and is not broadcast to spectator servers.
+            if (!Mods.Value.Any(m => m is ModUnnerfed))
+                spectatorClient.BeginPlaying(token, GameplayState, Score);
         }
 
         public override bool Pause()

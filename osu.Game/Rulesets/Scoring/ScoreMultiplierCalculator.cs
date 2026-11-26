@@ -58,6 +58,9 @@ namespace osu.Game.Rulesets.Scoring
         /// </summary>
         public double CalculateFor(IEnumerable<Mod> mods)
         {
+            // With the Unnerfed mod active, mods which make the beatmap easier don't apply their score penalty.
+            mods = ModUnnerfed.GetEffectiveMods(mods, Context.BeatmapDifficultyWithoutMods);
+
             var allModsByType = mods.ToDictionary(m => m.GetType());
 
             if (allModsByType.Count == 0)

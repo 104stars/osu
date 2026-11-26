@@ -4,6 +4,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Game.Beatmaps;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 
 namespace osu.Game.Rulesets.Difficulty
@@ -17,11 +18,12 @@ namespace osu.Game.Rulesets.Difficulty
             Ruleset = ruleset;
         }
 
+        // With the Unnerfed mod active, mods which make the beatmap easier are excluded so they don't lower performance points.
         public Task<PerformanceAttributes> CalculateAsync(ScoreInfo score, DifficultyAttributes attributes, CancellationToken cancellationToken)
-            => Task.Run(() => CreatePerformanceAttributes(score, attributes), cancellationToken);
+            => Task.Run(() => CreatePerformanceAttributes(ModUnnerfed.GetEffectiveScore(score), attributes), cancellationToken);
 
         public PerformanceAttributes Calculate(ScoreInfo score, DifficultyAttributes attributes)
-            => CreatePerformanceAttributes(score, attributes);
+            => CreatePerformanceAttributes(ModUnnerfed.GetEffectiveScore(score), attributes);
 
         public PerformanceAttributes Calculate(ScoreInfo score, IWorkingBeatmap beatmap)
             => Calculate(score, Ruleset.CreateDifficultyCalculator(beatmap).Calculate(score.Mods));

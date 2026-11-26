@@ -71,7 +71,13 @@ namespace osu.Game.Online.API
 
         public Language Language => game.CurrentLanguage.Value;
 
-        protected bool HasLogin => authentication.Token.Value != null || (!string.IsNullOrEmpty(ProvidedUsername) && !string.IsNullOrEmpty(password));
+        protected bool HasLogin => !loginBlocked && (authentication.Token.Value != null || (!string.IsNullOrEmpty(ProvidedUsername) && !string.IsNullOrEmpty(password)));
+
+        /// <summary>
+        /// Safety net for this fork: logging in to the official osu! servers is never allowed,
+        /// so that an official account can never be used (or put at risk) by a modified client.
+        /// </summary>
+        private readonly bool loginBlocked;
 
         private readonly CancellationTokenSource cancellationToken = new CancellationTokenSource();
         private readonly Logger log;
@@ -98,13 +104,23 @@ namespace osu.Game.Online.API
 
             authentication = new OAuth(endpoints.APIClientID, endpoints.APIClientSecret, Endpoints.APIUrl);
 
+            loginBlocked = IsOfficialServer(Endpoints.APIUrl);
+
             log = Logger.GetLogger(LoggingTarget.Network);
             log.Add($@"API endpoint root: {Endpoints.APIUrl}");
             log.Add($@"API request version: {APIVersion}");
 
             ProvidedUsername = config.Get<string>(OsuSetting.Username);
 
-            authentication.TokenString = config.Get<string>(OsuSetting.Token);
+            if (loginBlocked)
+            {
+                log.Add(@"Logging in to the official osu! servers is disabled in this build. Any stored credentials were discarded.");
+                ProvidedUsername = string.Empty;
+                config.SetValue(OsuSetting.Token, string.Empty);
+            }
+            else
+                authentication.TokenString = config.Get<string>(OsuSetting.Token);
+
             authentication.Token.ValueChanged += onTokenChanged;
 
             AddInternal(localUserState = new LocalUserState(this, config));
@@ -478,9 +494,26 @@ namespace osu.Game.Online.API
         public Task PerformAsync(APIRequest request) =>
             Task.Factory.StartNew(() => Perform(request), TaskCreationOptions.LongRunning);
 
+        /// <summary>
+        /// Whether the given API URL points to the official osu! servers.
+        /// </summary>
+        public static bool IsOfficialServer(string apiUrl)
+        {
+            if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri))
+                return false;
+
+            return uri.Host.Equals(@"osu.ppy.sh", StringComparison.OrdinalIgnoreCase);
+        }
+
         public void Login(string username, string password)
         {
             Debug.Assert(State.Value == APIState.Offline);
+
+            if (loginBlocked)
+            {
+                log.Add(@"Refusing to log in: logging in to the official osu! servers is disabled in this build.");
+                return;
+            }
 
             ProvidedUsername = username;
             this.password = password;

@@ -182,7 +182,8 @@ namespace osu.Game.Rulesets.Difficulty
         /// <param name="cancellationToken">The cancellation token.</param>
         private void preProcess([NotNull] IEnumerable<Mod> mods, CancellationToken cancellationToken)
         {
-            playableMods = mods.Select(m => m.DeepClone()).ToArray();
+            // With the Unnerfed mod active, mods which make the beatmap easier are excluded so they don't lower the star rating.
+            playableMods = ModUnnerfed.GetEffectiveMods(mods, WorkingBeatmap.BeatmapInfo.Difficulty).Select(m => m.DeepClone()).ToArray();
             Beatmap = WorkingBeatmap.GetPlayableBeatmap(ruleset, playableMods, cancellationToken);
         }
 

@@ -72,6 +72,9 @@ namespace osu.Game.Configuration
             SetDefault(OsuSetting.Username, string.Empty);
             SetDefault(OsuSetting.Token, string.Empty);
 
+            SetDefault(OsuSetting.PublicLeaderboardClientID, string.Empty);
+            SetDefault(OsuSetting.PublicLeaderboardClientSecret, string.Empty);
+
             SetDefault(OsuSetting.AutomaticallyDownloadMissingBeatmaps, true);
 
             SetDefault(OsuSetting.SavePassword, true).ValueChanged += enabled =>
@@ -253,6 +256,7 @@ namespace osu.Game.Configuration
             switch (lookup)
             {
                 case OsuSetting.Token:
+                case OsuSetting.PublicLeaderboardClientSecret:
                     return true;
             }
 
@@ -488,5 +492,15 @@ namespace osu.Game.Configuration
         /// </summary>
         PMFriendsOnly,
         HitsoundVolume,
+
+        /// <summary>
+        /// The client ID of a user-owned OAuth application on osu.ppy.sh, used only to read public beatmap leaderboards (no login).
+        /// </summary>
+        PublicLeaderboardClientID,
+
+        /// <summary>
+        /// The client secret of a user-owned OAuth application on osu.ppy.sh, used only to read public beatmap leaderboards (no login).
+        /// </summary>
+        PublicLeaderboardClientSecret,
     }
 }
