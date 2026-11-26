@@ -359,6 +359,12 @@ namespace osu.Game.Online.Leaderboards
                 case LeaderboardState.NoTeam:
                     return new MessagePlaceholder(LeaderboardStrings.NoTeam);
 
+                case LeaderboardState.PublicLeaderboardNotConfigured:
+                    return new MessagePlaceholder(PublicLeaderboardMessages.NOT_CONFIGURED);
+
+                case LeaderboardState.OnlyGlobalAvailable:
+                    return new MessagePlaceholder(PublicLeaderboardMessages.ONLY_GLOBAL);
+
                 case LeaderboardState.Retrieving:
                     return null;
 

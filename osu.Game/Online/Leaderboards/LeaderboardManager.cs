@@ -12,6 +12,7 @@ using osu.Framework.Development;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
+using osu.Framework.Threading;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Database;
@@ -52,10 +53,40 @@ namespace osu.Game.Online.Leaderboards
         private PublicLeaderboardClient publicLeaderboards = null!;
         private CancellationTokenSource? publicFetchCancellation;
 
+        private readonly Bindable<string> publicClientId = new Bindable<string>();
+        private readonly Bindable<string> publicClientSecret = new Bindable<string>();
+        private ScheduledDelegate? scheduledCredentialsRefetch;
+
         [BackgroundDependencyLoader]
         private void load(OsuConfigManager config)
         {
             publicLeaderboards = new PublicLeaderboardClient(config);
+
+            config.BindWith(OsuSetting.PublicLeaderboardClientID, publicClientId);
+            config.BindWith(OsuSetting.PublicLeaderboardClientSecret, publicClientSecret);
+        }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            publicClientId.BindValueChanged(_ => onPublicCredentialsChanged());
+            publicClientSecret.BindValueChanged(_ => onPublicCredentialsChanged());
+        }
+
+        /// <summary>
+        /// Reload the current leaderboard shortly after the public leaderboard credentials change (debounced, as they may be typed in character by character).
+        /// </summary>
+        private void onPublicCredentialsChanged()
+        {
+            scheduledCredentialsRefetch?.Cancel();
+            scheduledCredentialsRefetch = Scheduler.AddDelayed(() =>
+            {
+                if (CurrentCriteria == null || CurrentCriteria.Scope == BeatmapLeaderboardScope.Local)
+                    return;
+
+                FetchWithCriteria(CurrentCriteria, forceRefresh: true);
+            }, 1000);
         }
 
         /// <summary>
@@ -105,7 +136,10 @@ namespace osu.Game.Online.Leaderboards
 
                     if (!usePublicLeaderboards && !api.IsLoggedIn)
                     {
-                        scores.Value = LeaderboardScores.Failure(LeaderboardFailState.NotLoggedIn);
+                        // Without a login, only the global leaderboard can be read (through the public API).
+                        scores.Value = LeaderboardScores.Failure(newCriteria.Scope == BeatmapLeaderboardScope.Global
+                            ? LeaderboardFailState.PublicLeaderboardNotConfigured
+                            : LeaderboardFailState.OnlyGlobalAvailable);
                         return;
                     }
 
@@ -348,6 +382,16 @@ namespace osu.Game.Online.Leaderboards
         NoneSelected = -4,
         NotLoggedIn = -5,
         NotSupporter = -6,
-        NoTeam = -7
+        NoTeam = -7,
+
+        /// <summary>
+        /// Not logged in, and no OAuth application credentials were provided for reading public leaderboards.
+        /// </summary>
+        PublicLeaderboardNotConfigured = -8,
+
+        /// <summary>
+        /// Not logged in, and a leaderboard other than global was requested. Only the global leaderboard can be read without a login.
+        /// </summary>
+        OnlyGlobalAvailable = -9,
     }
 }

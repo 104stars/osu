@@ -16,5 +16,7 @@ namespace osu.Game.Online.Leaderboards
         NotLoggedIn = LeaderboardFailState.NotLoggedIn,
         NotSupporter = LeaderboardFailState.NotSupporter,
         NoTeam = LeaderboardFailState.NoTeam,
+        PublicLeaderboardNotConfigured = LeaderboardFailState.PublicLeaderboardNotConfigured,
+        OnlyGlobalAvailable = LeaderboardFailState.OnlyGlobalAvailable,
     }
 }

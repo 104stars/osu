@@ -30,6 +30,7 @@ using osu.Game.Online.API;
 using osu.Game.Online.Leaderboards;
 using osu.Game.Online.Placeholders;
 using osu.Game.Overlays;
+using osu.Game.Overlays.Settings.Sections.Online;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
@@ -69,6 +70,9 @@ namespace osu.Game.Screens.Select
 
         [Resolved]
         private IAPIProvider api { get; set; } = null!;
+
+        [Resolved]
+        private SettingsOverlay? settings { get; set; }
 
         private Container<Placeholder> placeholderContainer = null!;
         private Placeholder? placeholder;
@@ -549,6 +553,15 @@ namespace osu.Game.Screens.Select
 
                 case LeaderboardState.NoTeam:
                     return new MessagePlaceholder(LeaderboardStrings.NoTeam);
+
+                case LeaderboardState.PublicLeaderboardNotConfigured:
+                    return new ClickablePlaceholder(PublicLeaderboardMessages.NOT_CONFIGURED, FontAwesome.Solid.Cog)
+                    {
+                        Action = () => settings?.ShowAtControl<PublicLeaderboardSettings>()
+                    };
+
+                case LeaderboardState.OnlyGlobalAvailable:
+                    return new MessagePlaceholder(PublicLeaderboardMessages.ONLY_GLOBAL);
 
                 case LeaderboardState.Retrieving:
                     return null;
